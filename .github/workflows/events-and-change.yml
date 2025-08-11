@@ -64,3 +64,18 @@ jobs:
         run: |
           echo "No base commit found (initial commit or manual run)."
           echo "Treating all files as changed."
+
+      - name: Run unit tests (src changed)
+        if: contains(steps.diff.outputs.files, 'src/')
+        run: |
+          echo "src/ changed; would run unit tests here."
+
+      - name: Build docs (docs changed)
+        if: contains(steps.diff.outputs.files, 'docs/')
+        run: |
+          echo "docs/ changed; would build docs here."
+
+      - name: No targeted changes
+        if: ${{ !contains(steps.diff.outputs.files, 'src/') && !contains(steps.diff.outputs.files, 'docs/') }}
+        run: echo "No changes in src/ or docs/."
+
