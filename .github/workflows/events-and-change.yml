@@ -24,3 +24,43 @@ jobs:
           echo "actor=${{ github.actor }}"
           echo "base_ref=${{ github.base_ref }}"
           echo "head_ref=${{ github.head_ref }}"
+
+      - name: Derive base and head SHAs
+        id: shas
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PR: compare base SHA to head SHA from the event payload
+            echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            # Push: compare before -> after (available on push payload)
+            echo "base=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.event.after }}" >> "$GITHUB_OUTPUT"
+          else
+            # Fallback: compare against previous commit on current branch
+            echo "base=$(git rev-parse HEAD~1 || echo '')" >> "$GITHUB_OUTPUT"
+            echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Computed base/head:"
+          cat "$GITHUB_OUTPUT"
+
+      - name: List changed files
+        id: diff
+        if: steps.shas.outputs.base != ''
+        shell: bash
+        run: |
+          git fetch --no-tags --depth=2 origin ${{ github.ref_name }} || true
+          echo "Changed files between:"
+          echo "BASE=${{ steps.shas.outputs.base }}"
+          echo "HEAD=${{ steps.shas.outputs.head }}"
+          git diff --name-only "${{ steps.shas.outputs.base }}" "${{ steps.shas.outputs.head }}" > changed_files.txt || true
+          echo "files=$(paste -sd, changed_files.txt)" >> "$GITHUB_OUTPUT"
+          echo "Changed files:"
+          cat changed_files.txt || true
+
+      - name: Handle initial commit case (no base)
+        if: steps.shas.outputs.base == ''
+        run: |
+          echo "No base commit found (initial commit or manual run)."
+          echo "Treating all files as changed."
